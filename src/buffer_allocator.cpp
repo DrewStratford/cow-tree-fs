@@ -20,6 +20,13 @@ BufferAllocator::BufferAllocator(FILE* file, size_t capacity) : m_file(file), m_
 	}
 }
 
+BlockID BufferAllocator::get_id(int index) {
+	if (index < 0 || m_capacity <= index)
+		return -1;
+	auto tag = &m_tags[index];
+	return tag->offset;
+}
+
 void BufferAllocator::set_dirty(int index) {
 	if (index < 0 || m_capacity <= index)
 		return;

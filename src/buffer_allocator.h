@@ -44,6 +44,8 @@ class BufferAllocator {
 		int obtain(int index);
 		void release(int index);
 
+		BlockID get_id(int index);
+
 		void set_dirty(int index);
 };
 
@@ -99,9 +101,27 @@ class BufferPointer {
 			}
 		}
 
+		char* data() {
+			return m_buffer;
+		}
+
+		BlockID id() {
+			if (m_allocator) {
+				return m_allocator->get_id(m_index);
+			}
+
+			return -1;
+		}
+
 		void flush() {
 			if (m_allocator) {
 				m_allocator->flush(m_index);
+			}
+		}
+
+		void set_dirty() {
+			if (m_allocator) {
+				m_allocator->set_dirty(m_index);
 			}
 		}
 

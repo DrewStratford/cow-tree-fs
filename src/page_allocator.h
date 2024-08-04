@@ -1,9 +1,10 @@
 #pragma once
 
+#include "buffer_allocator.h"
 #include "definitions.h"
 
 
-void intiate_page_allocator(FreeList& free_list, int total_pages);
+void initiate_page_allocator(BufferAllocator& ba, int total_pages);
 
-Header* allocate_page();
-void free_page(BlockID);
+BufferPointer allocate_page(BufferAllocator& ba);
+void free_page(BufferAllocator& ba, BlockID);
