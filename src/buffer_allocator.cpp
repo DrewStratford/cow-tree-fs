@@ -52,6 +52,7 @@ void BufferAllocator::unallocate(int index) {
 	tag->next = m_free;
 	tag->references = 0;
 	tag->dirty = false;
+	m_offset_to_index.erase(tag->offset);
 	tag->offset = 0;
 
 	m_free = tag;
@@ -82,7 +83,6 @@ void BufferAllocator::release(int index) {
 		printf("flushing %d\n", index);
 		flush(index);
 		unallocate(index);
-		m_offset_to_index.erase(tag->offset);
 	}
 }
 

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <limits>
 
 using BlockID = uint64_t;
 
@@ -25,6 +26,7 @@ struct [[gnu::packed]] FreeListPage {
 
 
 using KeyId = uint64_t;
+const KeyId MAX_KEY_ID = std::numeric_limits<uint64_t>::max();
 
 
 // General object header
@@ -33,23 +35,6 @@ struct [[gnu::packed]] Header {
 	KeyId key { 0 };
 	BlockID block { 0 };
 	Type type { Unknown };
-};
-
-// BTree node
-struct [[gnu::packed]] KeyPair {
-	KeyId key { 0 };
-	BlockID value { 0 };
-};
-
-struct [[gnu::packed]] BTNodeHeader {
-	bool is_leaf { false };
-	size_t count { 0 };
-};
-
-const size_t MAX_KEY_PAIRS = (PAGE_SIZE - sizeof(BTNodeHeader)) / sizeof(KeyPair);
-struct [[gnu::packed]] BTNode {
-	BTNodeHeader header;
-	KeyPair pairs[MAX_KEY_PAIRS];
 };
 
 // Test item
