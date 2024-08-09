@@ -1,5 +1,4 @@
 #include <vector>
-#include <algorithm>
 
 #include "BTree.h"
 #include "page_allocator.h"
@@ -81,10 +80,7 @@ BlockID search_node(BufferAllocator& ba, BTNode* node, KeyId key) {
 			return search_btree(ba, subleaf_id, key);
 		}
 	}
-	
-	// look in the right most node
-	BlockID subleaf_id = node->pairs[i].value;
-	return search_btree(ba, subleaf_id, key);
+	return -1;
 }
 
 InsertPropagation insert_btree(BufferAllocator& ba, BlockID id, KeyPair key_pair) {
@@ -172,7 +168,7 @@ InsertPropagation insert_node(BufferAllocator& ba, BTNode* node, KeyPair key_pai
 
 	int i = 0;
 	for (; i < node->header.count; i++) {
-		if (node->pairs[i].key <= key_pair.key) {
+		if (key_pair.key <= node->pairs[i].key) {
 			break;
 		}
 	}
@@ -185,12 +181,12 @@ InsertPropagation insert_node(BufferAllocator& ba, BTNode* node, KeyPair key_pai
 		for (int j = 0; j < node->header.count; j++) {
 			// also push in the insertee
 			if (j == i) {
-				temp_key_pairs.push_back(node->pairs[j]);
-				temp_key_pairs[temp_key_pairs.size()-1].value = insert_prop.left;
 				temp_key_pairs.push_back(KeyPair {
 						.key = insert_prop.key,
-						.value = insert_prop.right,
+						.value = insert_prop.left,
 						});
+				temp_key_pairs.push_back(node->pairs[j]);
+				temp_key_pairs[temp_key_pairs.size()-1].value = insert_prop.right;
 			} else {
 				temp_key_pairs.push_back(node->pairs[j]);
 			}
@@ -198,7 +194,7 @@ InsertPropagation insert_node(BufferAllocator& ba, BTNode* node, KeyPair key_pai
 		}
 
 		// test for split and propagate.
-		if (temp_key_pairs.size() >= MAX_KEY_PAIRS-1) {
+		if (temp_key_pairs.size() >= MAX_KEY_PAIRS) {
 			// TODO split and propagate
 			auto split_at = temp_key_pairs.size() / 2;
 			auto promoting = temp_key_pairs[split_at];
@@ -211,7 +207,7 @@ InsertPropagation insert_node(BufferAllocator& ba, BTNode* node, KeyPair key_pai
 				new_left->pairs[i] = temp_key_pairs[i];
 				new_left->header.count++;
 			}
-			new_left->pairs[i].key = MAX_KEY_ID;
+			new_left->pairs[split_at].key = MAX_KEY_ID;
 
 			auto new_right_raw = new_empty_node(ba);
 			auto new_right = (BTNode*)new_right_raw.data();
@@ -226,6 +222,7 @@ InsertPropagation insert_node(BufferAllocator& ba, BTNode* node, KeyPair key_pai
 
 			return InsertPropagation{
 				.is_split = true,
+				.key = promoting.key,
 				.left = new_left_raw.id(),
 				.right = new_right_raw.id(),
 			};
@@ -236,7 +233,6 @@ InsertPropagation insert_node(BufferAllocator& ba, BTNode* node, KeyPair key_pai
 			auto new_node_raw = new_empty_node(ba);
 			auto new_node = (BTNode*)new_node_raw.data();
 			new_node->header.count = temp_key_pairs.size();
-			new_node->header.is_leaf = true;
 
 			for (int i = 0; i < temp_key_pairs.size(); i++) {
 				new_node->pairs[i] = temp_key_pairs[i];
@@ -254,10 +250,9 @@ InsertPropagation insert_node(BufferAllocator& ba, BTNode* node, KeyPair key_pai
 		// No split, just update to node to point at new child
 		auto new_node_raw = clone_node(ba, node);
 		auto new_node = (BTNode*)new_node_raw.data();
-		new_node->pairs[i] = KeyPair {
-			.key = key_pair.key,
-			.value = insert_prop.update,
-		};
+		new_node->pairs[i].value = insert_prop.update;
+
+		new_node_raw.set_dirty();
 
 		return InsertPropagation {
 			.is_split = false,

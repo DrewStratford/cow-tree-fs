@@ -49,6 +49,7 @@ void BufferAllocator::unallocate(int index) {
 		return;
 
 	auto tag = &m_tags[index];
+	//printf("unallocating %d %ld\n", index, tag->offset);
 	tag->next = m_free;
 	tag->references = 0;
 	tag->dirty = false;
@@ -78,9 +79,9 @@ void BufferAllocator::release(int index) {
 
 	auto tag = &m_tags[index];
 	tag->references--;
-	printf("releasing %d %d\n", index, tag->references);
+	//printf("releasing %d %d\n", index, tag->references);
 	if (tag->references <= 0) {
-		printf("flushing %d\n", index);
+		//printf("flushing %d\n", index);
 		flush(index);
 		unallocate(index);
 	}

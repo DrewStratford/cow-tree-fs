@@ -92,7 +92,7 @@ void insert(BufferAllocator& ba, KeyId key, BlockID value) {
 		// Make a new root
 		auto new_root_raw = new_empty_node(ba);
 		auto new_root = (BTNode*)new_root_raw.data();
-		new_root->header.count = 1;
+		new_root->header.count = 2;
 		new_root->pairs[0] = KeyPair {
 			.key = propagation.key,
 			.value = propagation.left,

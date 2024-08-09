@@ -20,7 +20,7 @@ struct [[gnu::packed]] BTNodeHeader {
 };
 
 //const size_t MAX_KEY_PAIRS = (PAGE_SIZE - sizeof(BTNodeHeader)) / sizeof(KeyPair);
-const size_t MAX_KEY_PAIRS = 10;
+const size_t MAX_KEY_PAIRS = 6;
 struct [[gnu::packed]] BTNode {
 	BTNodeHeader header;
 	KeyPair pairs[MAX_KEY_PAIRS];
