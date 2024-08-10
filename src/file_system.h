@@ -10,4 +10,4 @@ void pop(BufferAllocator& ba);
 
 
 void insert(BufferAllocator& ba, KeyId key, BlockID value);
-void lookup(BufferAllocator& ba, KeyId key);
+BlockID lookup(BufferAllocator& ba, KeyId key);

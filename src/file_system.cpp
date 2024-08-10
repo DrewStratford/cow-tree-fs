@@ -71,12 +71,12 @@ void pop(BufferAllocator& ba) {
 	head.set_dirty();
 }
 
-void lookup(BufferAllocator& ba, KeyId key) {
+BlockID lookup(BufferAllocator& ba, KeyId key) {
 	auto super_block_raw = ba.load(0);
 	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
 
 	auto result = search_btree(ba, super_block->tree_root, key);
-	printf("result is %ld\n", result);
+	return result;
 }
 
 void insert(BufferAllocator& ba, KeyId key, BlockID value) {
