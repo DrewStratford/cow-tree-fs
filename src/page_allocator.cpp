@@ -20,8 +20,9 @@ BufferPointer allocate_page(BufferAllocator& ba) {
 	if (free_list.is_full())
 		return BufferPointer();
 
+	bool should_bump_water_mark = free_list.next_free == 0;
 	// Our free list is empty, we have to increase the watermark.
-	if (free_list.next_free == 0) {
+	if (should_bump_water_mark) {
 		free_list.next_free = free_list.highest_unallocated;
 		free_list.highest_unallocated += PAGE_SIZE;
 	}
@@ -29,8 +30,12 @@ BufferPointer allocate_page(BufferAllocator& ba) {
 	auto next_free = free_list.next_free;
 
 	auto free_block = ba.load(next_free);
-	// Point to the next free page
-	free_list.next_free = ((FreeListPage*)free_block.data())->next;
+	// Point to the next free page (only if we did not bump the watermark!).
+	if (should_bump_water_mark) {
+		free_list.next_free = 0;
+	} else {
+		free_list.next_free = ((FreeListPage*)free_block.data())->next;
+	}
 	// Clear the returned page
 	memset(free_block.data(), 0, PAGE_SIZE);
 
