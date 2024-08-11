@@ -83,7 +83,9 @@ void insert(BufferAllocator& ba, KeyId key, BlockID value) {
 	auto super_block_raw = ba.load(0);
 	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
 
-	auto propagation = insert_btree(ba, super_block->tree_root, KeyPair {
+	auto old_root = super_block->tree_root;
+	std::unordered_set<BlockID> to_free;
+	auto propagation = insert_btree(ba, to_free, super_block->tree_root, KeyPair {
 				.key = key,
 				.value = value,
 			});
@@ -107,5 +109,10 @@ void insert(BufferAllocator& ba, KeyId key, BlockID value) {
 	} else {
 		super_block->tree_root = propagation.update;
 	}
+
+	// Free all of the copied blocks (in the future we could store these in a snapshot).
+	to_free.insert(old_root);
+	free_pages(ba, to_free);
+	
 	super_block_raw.set_dirty();
 }

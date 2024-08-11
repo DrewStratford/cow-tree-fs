@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_set>
+
 #include "buffer_allocator.h"
 #include "definitions.h"
 
@@ -45,7 +47,6 @@ struct InsertPropagation {
 	BlockID update { 0 };
 };
 
-
-InsertPropagation insert_btree(BufferAllocator& ba, BlockID id, KeyPair key_pair);
-InsertPropagation insert_leaf(BufferAllocator& ba, BTNode* node, KeyPair key_pair);
-InsertPropagation insert_node(BufferAllocator& ba, BTNode* node, KeyPair key_pair);
+InsertPropagation insert_btree(BufferAllocator& ba, std::unordered_set<BlockID>& free, BlockID id, KeyPair key_pair);
+InsertPropagation insert_leaf(BufferAllocator& ba, std::unordered_set<BlockID>& free, BTNode* node, KeyPair key_pair);
+InsertPropagation insert_node(BufferAllocator& ba, std::unordered_set<BlockID>& free, BTNode* node, KeyPair key_pair);

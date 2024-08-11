@@ -83,18 +83,22 @@ BlockID search_node(BufferAllocator& ba, BTNode* node, KeyId key) {
 	return -1;
 }
 
-InsertPropagation insert_btree(BufferAllocator& ba, BlockID id, KeyPair key_pair) {
+InsertPropagation insert_btree(BufferAllocator& ba, std::unordered_set<BlockID>& freed, BlockID id, KeyPair key_pair) {
 	auto node_raw = ba.load(id);
 	auto node = (BTNode*)node_raw.data();
 
+	// Allow the page allocator to reclaim the copied page once
+	// this insert is complete
+	freed.insert(id);
+
 	if (node->header.is_leaf) {
-		return insert_leaf(ba,node, key_pair);
+		return insert_leaf(ba, freed, node, key_pair);
 	} else {
-		return insert_node(ba, node, key_pair);
+		return insert_node(ba, freed, node, key_pair);
 	}
 }
 
-InsertPropagation insert_leaf(BufferAllocator& ba, BTNode* node, KeyPair key_pair) {
+InsertPropagation insert_leaf(BufferAllocator& ba, std::unordered_set<BlockID>& freed, BTNode* node, KeyPair key_pair) {
 	std::vector<KeyPair> temp_key_pairs;
 	bool pushed = false;
 	for (int i = 0; i < node->header.count; i++) {
@@ -164,7 +168,7 @@ InsertPropagation insert_leaf(BufferAllocator& ba, BTNode* node, KeyPair key_pai
 	}
 }
 
-InsertPropagation insert_node(BufferAllocator& ba, BTNode* node, KeyPair key_pair) {
+InsertPropagation insert_node(BufferAllocator& ba, std::unordered_set<BlockID>& freed, BTNode* node, KeyPair key_pair) {
 
 	int i = 0;
 	for (; i < node->header.count; i++) {
@@ -174,7 +178,7 @@ InsertPropagation insert_node(BufferAllocator& ba, BTNode* node, KeyPair key_pai
 	}
 
 	BlockID subtree = node->pairs[i].value;
-	auto insert_prop = insert_btree(ba, subtree, key_pair);
+	auto insert_prop = insert_btree(ba, freed, subtree, key_pair);
 
 	if (insert_prop.is_split) {
 		std::vector<KeyPair> temp_key_pairs;

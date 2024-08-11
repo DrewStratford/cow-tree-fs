@@ -59,3 +59,20 @@ void free_page(BufferAllocator& ba, BlockID block_id) {
 	to_free_raw.set_dirty();
 	super_block_raw.set_dirty();
 }
+
+void free_pages(BufferAllocator& ba, std::unordered_set<BlockID>& to_free) {
+	auto super_block_raw = ba.load(0);
+	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
+	auto& free_list = super_block->free_list;
+
+	for (auto block_id : to_free) {
+		// Freed block is the new head of the list.
+		auto freeing_raw = ba.load(block_id);
+		auto freeing = (FreeListPage*)freeing_raw.data();
+		freeing->next = free_list.next_free;
+		free_list.next_free = block_id;
+		freeing_raw.set_dirty();
+	}
+
+	super_block_raw.set_dirty();
+}
