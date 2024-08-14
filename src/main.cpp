@@ -99,7 +99,14 @@ int main(int argc, char** argv) {
 		BufferAllocator ba (f, 20);
 		int key = std::atoi(argv[2]);
 		auto res = lookup(ba, key);
-		printf("result is %lu\n", res);
+		printf("result is %ld\n", res);
+	} else if(strcmp(argv[1], "remove") == 0) {
+		FILE* f = fopen("test.dat", "r+");
+		if (!f) return -1;
+		BufferAllocator ba (f, 20);
+		int key = std::atoi(argv[2]);
+		auto res = remove(ba, key);
+		printf("result is %ld\n", res);
 	} else if(strcmp(argv[1], "test_seq") == 0) {
 		int amount = std::atoi(argv[2]);
 		test_insert_sequential(amount);

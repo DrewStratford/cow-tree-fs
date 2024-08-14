@@ -11,3 +11,4 @@ void pop(BufferAllocator& ba);
 
 void insert(BufferAllocator& ba, KeyId key, BlockID value);
 BlockID lookup(BufferAllocator& ba, KeyId key);
+BlockID remove(BufferAllocator& ba, KeyId key);

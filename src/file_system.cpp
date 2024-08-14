@@ -79,6 +79,31 @@ BlockID lookup(BufferAllocator& ba, KeyId key) {
 	return result;
 }
 
+BlockID remove(BufferAllocator& ba, KeyId key) {
+	auto super_block_raw = ba.load(0);
+	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
+
+	auto old_root = super_block->tree_root;
+	std::unordered_set<BlockID> to_free;
+	auto propagation = delete_btree(ba, to_free, super_block->tree_root, key);
+
+	if (propagation.did_modify) {
+		// TODO: consider root with only one item.
+		auto new_root_raw = propagation.new_child;
+		auto new_root = (BTNode*) new_root_raw.data();
+		if (!new_root->header.is_leaf && new_root->header.count == 1) {
+			to_free.insert(new_root_raw.id());
+			super_block->tree_root = new_root->pairs[0].value;
+		} else {
+			super_block->tree_root = propagation.new_child.id();
+		}
+		free_pages(ba, to_free);
+		super_block_raw.set_dirty();
+	}
+
+	return propagation.deleted_value;
+}
+
 void insert(BufferAllocator& ba, KeyId key, BlockID value) {
 	auto super_block_raw = ba.load(0);
 	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();

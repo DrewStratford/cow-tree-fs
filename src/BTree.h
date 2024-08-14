@@ -26,6 +26,9 @@ const size_t MAX_KEY_PAIRS = 6;
 struct [[gnu::packed]] BTNode {
 	BTNodeHeader header;
 	KeyPair pairs[MAX_KEY_PAIRS];
+
+	bool enough_entries();
+	bool can_share_entry();
 };
 
 BufferPointer new_empty_leaf(BufferAllocator& ba);
@@ -50,3 +53,13 @@ struct InsertPropagation {
 InsertPropagation insert_btree(BufferAllocator& ba, std::unordered_set<BlockID>& free, BlockID id, KeyPair key_pair);
 InsertPropagation insert_leaf(BufferAllocator& ba, std::unordered_set<BlockID>& free, BTNode* node, KeyPair key_pair);
 InsertPropagation insert_node(BufferAllocator& ba, std::unordered_set<BlockID>& free, BTNode* node, KeyPair key_pair);
+
+struct DeletePropagation {
+	bool did_modify { false };
+	BlockID deleted_value { 0 };
+	BufferPointer new_child;
+};
+
+DeletePropagation delete_btree(BufferAllocator& ba, std::unordered_set<BlockID>& free, BlockID id, KeyId key);
+DeletePropagation delete_leaf(BufferAllocator& ba, std::unordered_set<BlockID>& free, BTNode* node, KeyId key);
+DeletePropagation delete_node(BufferAllocator& ba, std::unordered_set<BlockID>& free, BTNode* node, KeyId key);

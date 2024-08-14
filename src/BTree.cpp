@@ -48,6 +48,22 @@ BufferPointer clone_node(BufferAllocator& ba, BTNode* old_node) {
 	return new_page;
 }
 
+bool BTNode::enough_entries() {
+	if (this->header.is_leaf) {
+		return this->header.count >= MAX_KEY_PAIRS/2;
+	} else {
+		return this->header.count >= (MAX_KEY_PAIRS-1)/2;
+	}
+}
+
+bool BTNode::can_share_entry(){
+	if (this->header.is_leaf) {
+		return this->header.count >= (MAX_KEY_PAIRS/2)+1;
+	} else {
+		return this->header.count >= ((MAX_KEY_PAIRS-1)/2)+1;
+	}
+}
+
 BlockID search_btree(BufferAllocator& ba, BlockID id, KeyId key) {
 	auto node_raw = ba.load(id);
 	auto node = (BTNode*)node_raw.data();
@@ -172,7 +188,7 @@ InsertPropagation insert_node(BufferAllocator& ba, std::unordered_set<BlockID>& 
 
 	int i = 0;
 	for (; i < node->header.count; i++) {
-		if (key_pair.key <= node->pairs[i].key) {
+		if (key_pair.key < node->pairs[i].key) {
 			break;
 		}
 	}
@@ -263,4 +279,384 @@ InsertPropagation insert_node(BufferAllocator& ba, std::unordered_set<BlockID>& 
 			.update = new_node_raw.id(),
 		};
 	}
+}
+
+
+KeyPair find_min_leaf(BufferAllocator& ba, BTNode* node) {
+	if (node->header.count == 0) return KeyPair{};
+
+	return node->pairs[0];
+}
+
+KeyPair find_max_leaf(BufferAllocator& ba, BTNode* node) {
+	if (node->header.count == 0) return KeyPair{};
+
+	return node->pairs[node->header.count-1];
+}
+
+KeyPair find_max_node(BufferAllocator& ba, BTNode* node);
+KeyPair find_min_node(BufferAllocator& ba, BTNode* node);
+
+KeyPair find_max_btree(BufferAllocator& ba, BlockID id) {
+	auto node_raw = ba.load(id);
+	auto node = (BTNode*)node_raw.data();
+
+	if (node->header.is_leaf) {
+		return find_max_leaf(ba, node);
+	} else {
+		return find_max_node(ba, node);
+	}
+}
+
+KeyPair find_min_btree(BufferAllocator& ba, BlockID id) {
+	auto node_raw = ba.load(id);
+	auto node = (BTNode*)node_raw.data();
+
+	if (node->header.is_leaf) {
+		return find_min_leaf(ba, node);
+	} else {
+		return find_min_node(ba, node);
+	}
+}
+
+KeyPair find_max_node(BufferAllocator& ba, BTNode* node) {
+	if (node->header.count == 0) return KeyPair{};
+
+	auto max_child = node->pairs[node->header.count-1];
+	return find_max_btree(ba, max_child.value);
+}
+KeyPair find_min_node(BufferAllocator& ba, BTNode* node){
+	if (node->header.count == 0) return KeyPair{};
+
+	auto min_child = node->pairs[0];
+	return find_min_btree(ba, min_child.value);
+}
+
+DeletePropagation delete_btree(BufferAllocator& ba, std::unordered_set<BlockID>& freed, BlockID id, KeyId key) {
+	auto node_raw = ba.load(id);
+	auto node = (BTNode*)node_raw.data();
+
+	auto result = node->header.is_leaf
+		? delete_leaf(ba, freed, node, key)
+		: delete_node(ba, freed, node, key);
+
+	if (result.did_modify) {
+		freed.insert(id);
+	} 
+
+	return result;
+}
+
+DeletePropagation delete_leaf(BufferAllocator& ba, std::unordered_set<BlockID>& free, BTNode* node, KeyId key) {
+
+	// check if node actually contains the key
+	bool found = false;
+	BlockID deleted_value = 0;
+	for(int i = 0; i < node->header.count; i++) {
+		if (node->pairs[i].key == key) {
+			found = true;
+			deleted_value = node->pairs[i].value;
+			break;
+		}
+	}
+	if (!found) {
+		return DeletePropagation { };
+	}
+
+	// Copy everything (except deleted key) to a new leaf.
+	auto new_leaf_raw = new_empty_leaf(ba);
+	auto new_leaf = (BTNode*)new_leaf_raw.data();
+
+	int j = 0;
+	for (int i = 0; i < node->header.count; i++) {
+		if (node->pairs[i].key == key) continue;
+		new_leaf->pairs[j] = node->pairs[i];
+		j++;
+		new_leaf->header.count++;
+	}
+
+	new_leaf_raw.set_dirty();
+
+	return DeletePropagation {
+		.did_modify = true,
+		.deleted_value = deleted_value,
+		.new_child = new_leaf_raw,
+	};
+}
+
+DeletePropagation delete_merge(BufferAllocator& ba,
+		std::unordered_set<BlockID>& freed,
+		BTNode* root, BTNode* left, BTNode* right,
+		int left_idx, int right_idx,
+		BlockID deleted_value) {
+
+	auto right_key = root->pairs[right_idx].key;
+	auto left_key = root->pairs[left_idx].key;
+	bool are_leaves = left->header.is_leaf;
+
+	auto new_node_raw = are_leaves ? new_empty_leaf(ba) : new_empty_node(ba);
+	auto new_node = (BTNode*)new_node_raw.data();
+
+	for (int i = 0; i < left->header.count; i++, new_node->header.count++) {
+		new_node->pairs[new_node->header.count] = left->pairs[i];
+	}
+	if (!are_leaves && new_node->header.count > 0) {
+		new_node->pairs[new_node->header.count-1].key = left_key;
+	}
+	for (int i = 0; i < right->header.count; i++, new_node->header.count++) {
+		new_node->pairs[new_node->header.count] = right->pairs[i];
+	}
+
+	// create new root
+	auto new_root_raw = new_empty_node(ba);
+	auto new_root = (BTNode*)new_root_raw.data();
+
+	for (int i = 0; i < root->header.count; i++) {
+		int j = new_root->header.count;
+		if (i == right_idx) continue;
+		else if (i == left_idx) {
+			new_root->pairs[j].key = right_key;
+			new_root->pairs[j].value = new_node_raw.id();
+			new_root->header.count++;
+		} else {
+			new_root->pairs[j] = root->pairs[i];
+			new_root->header.count++;
+		}
+	}
+
+	new_node_raw.set_dirty();
+	new_root_raw.set_dirty();
+
+	// mark as free
+	freed.insert(root->pairs[left_idx].value);
+	freed.insert(root->pairs[right_idx].value);
+
+	return DeletePropagation {
+		.did_modify = true,
+		.deleted_value = deleted_value,
+		.new_child = new_root_raw,
+	};
+}
+
+DeletePropagation move_from_right(BufferAllocator& ba,
+		std::unordered_set<BlockID>& freed,
+		BTNode* root, BTNode* node, BTNode* right,
+		int node_idx, int right_idx,
+		BlockID deleted_value) {
+
+	auto right_key = root->pairs[right_idx].key;
+	auto node_key = root->pairs[node_idx].key;
+	bool are_leaves = right->header.is_leaf;
+
+	// copy to the new node
+	auto new_node_raw = clone_node(ba, node);
+	auto new_node = (BTNode*)new_node_raw.data();
+	new_node->pairs[node->header.count].key = right->pairs[0].key;
+	new_node->pairs[node->header.count].value = right->pairs[0].value;
+	new_node->header.count++;
+	if (!are_leaves) {
+		new_node->pairs[new_node->header.count-2].key = node_key;
+		new_node->pairs[new_node->header.count-1].key = MAX_KEY_ID;
+	}
+
+	// shift right to the left.
+	auto new_right_raw = are_leaves ? new_empty_leaf(ba) : new_empty_node(ba);
+	auto new_right = (BTNode*)new_right_raw.data();
+	for (int i = 0; i < right->header.count-1; i++) {
+		new_right->pairs[i] = right->pairs[i+1];
+		new_right->header.count++;
+	}
+
+	new_right_raw.set_dirty();
+	new_node_raw.set_dirty();
+	
+	// update the parent node
+	auto new_root_raw = clone_node(ba, root);
+	auto new_root = (BTNode*)new_root_raw.data();
+	auto new_max = find_min_btree(ba, new_right_raw.id());
+	new_root->pairs[node_idx].key = new_max.key;
+	new_root->pairs[node_idx].value = new_node_raw.id();
+	new_root->pairs[right_idx].key = right_key;
+	new_root->pairs[right_idx].value = new_right_raw.id();
+
+	new_root_raw.set_dirty();
+
+	// mark as free
+	freed.insert(root->pairs[right_idx].value);
+	freed.insert(root->pairs[node_idx].value);
+
+	return DeletePropagation {
+		.did_modify = true,
+		.deleted_value = deleted_value,
+		.new_child = new_root_raw,
+	};
+}
+
+DeletePropagation move_from_left(BufferAllocator& ba,
+		std::unordered_set<BlockID>& freed,
+		BTNode* root, BTNode* left, BTNode* node,
+		int left_idx, int node_idx,
+		BlockID deleted_value) {
+
+	auto left_key = root->pairs[left_idx].key;
+	auto node_key = root->pairs[node_idx].key;
+	bool are_leaves = left->header.is_leaf;
+
+	// copy to the new node
+	auto new_node_raw = are_leaves ? new_empty_leaf(ba) : new_empty_node(ba);
+	auto new_node = (BTNode*)new_node_raw.data();
+	
+	new_node->pairs[0] = left->pairs[left->header.count-1];
+	if (!are_leaves) {
+		new_node->pairs[0].key = left_key;
+	}
+	new_node->header.count++;
+	for(int i = 0; i < node->header.count; i++) {
+		new_node->pairs[1+i] = node->pairs[i];
+		new_node->header.count++;
+	}
+
+	// adjust the left node
+	auto new_left_raw = clone_node(ba, left);
+	auto new_left = (BTNode*)new_left_raw.data();
+
+	new_left->header.count--;
+	new_left->pairs[new_left->header.count] = KeyPair{.key=MAX_KEY_ID};
+	if (!are_leaves) {
+		new_left->pairs[new_left->header.count-1].key = MAX_KEY_ID;
+	}
+	
+	new_left_raw.set_dirty();
+	new_node_raw.set_dirty();
+
+	// update the parent node
+	auto new_root_raw = clone_node(ba, root);
+	auto new_root = (BTNode*)new_root_raw.data();
+	auto new_max = find_min_btree(ba, new_node_raw.id());
+	new_root->pairs[left_idx].key = new_max.key;
+	new_root->pairs[left_idx].value = new_left_raw.id();
+	new_root->pairs[node_idx].key = node_key;
+	new_root->pairs[node_idx].value = new_node_raw.id();
+
+	new_root_raw.set_dirty();
+
+	// mark as free
+	freed.insert(root->pairs[left_idx].value);
+	freed.insert(root->pairs[node_idx].value);
+
+	return DeletePropagation {
+		.did_modify = true,
+		.deleted_value = deleted_value,
+		.new_child = new_root_raw,
+	};
+}
+
+DeletePropagation delete_node(BufferAllocator& ba, std::unordered_set<BlockID>& free, BTNode* node, KeyId key) {
+
+	int idx = 0;
+	for (; idx < node->header.count; idx++) {
+		if (key < node->pairs[idx].key) {
+			break;
+		}
+	}
+
+	auto child = node->pairs[idx].value;
+	auto propagation = delete_btree(ba, free, child, key);
+
+	if (!propagation.did_modify) {
+		return propagation;
+	}
+
+	// There a few cases we need to handle 
+	// 1) the child has enough entries, so just update entry
+	// 2) not enough entries but the left node can share.
+	// 3) not enough entries but the right node can share.
+	// 4) not enough entries but can combine with left.
+	// 5) not enough entries but can comine with right.
+	
+	auto new_child_raw = propagation.new_child;
+	auto new_child = (BTNode*)new_child_raw.data();
+
+	// 1)
+	if (new_child->enough_entries()) {
+		auto new_node_raw = clone_node(ba, node);
+		auto new_node = (BTNode*)new_node_raw.data();
+		new_node->pairs[idx].value = new_child_raw.id();
+		new_node_raw.set_dirty();
+		return DeletePropagation {
+			.did_modify = true,
+			.deleted_value = propagation.deleted_value,
+			.new_child = new_node_raw,
+		};
+	}
+
+	int left_idx = idx - 1;
+	int right_idx = idx + 1;
+
+	// only left neighbour (2,4)
+	if (right_idx >= node->header.count) {
+		auto left_node_raw = ba.load(node->pairs[left_idx].value);
+		auto left_node = (BTNode*)left_node_raw.data();
+		// 2
+		if (left_node->can_share_entry())  {
+			return move_from_left(ba, free, 
+					node, left_node, new_child, 
+					left_idx, idx, 
+					propagation.deleted_value);
+		}
+		// 4
+		return delete_merge(ba, free,
+				node, left_node, new_child,
+				left_idx, idx,
+				propagation.deleted_value);
+	}
+	// only right neighbour (3,5)
+	else if (left_idx < 0) {
+		auto right_node_raw = ba.load(node->pairs[right_idx].value);
+		auto right_node = (BTNode*)right_node_raw.data();
+		// 3
+		if (right_node->can_share_entry()) {
+			return move_from_right(ba, free, 
+					node, new_child, right_node, 
+					idx, right_idx,
+					propagation.deleted_value);
+		}
+		// 5
+		return delete_merge(ba, free,
+				node, new_child, right_node,
+				idx, right_idx,
+				propagation.deleted_value);
+	}
+	// both neighbours (2,4,3)
+	else {
+		auto left_node_raw = ba.load(node->pairs[left_idx].value);
+		auto left_node = (BTNode*)left_node_raw.data();
+
+		// 2
+		if (left_node->can_share_entry()) {
+			return move_from_left(ba, free, 
+					node, left_node, new_child, 
+					left_idx, idx, 
+					propagation.deleted_value);
+		}
+
+		auto right_node_raw = ba.load(node->pairs[right_idx].value);
+		auto right_node = (BTNode*)right_node_raw.data();
+
+		// 3
+		if (right_node->can_share_entry()) {
+			return move_from_right(ba, free, 
+					node, new_child, right_node,
+					idx, right_idx,
+					propagation.deleted_value);
+		}
+
+		// 4
+		return delete_merge(ba, free,
+				node, left_node, new_child,
+				left_idx, idx,
+				propagation.deleted_value);
+
+	}
+
 }
