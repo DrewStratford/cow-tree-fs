@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "buffer_allocator.h"
 #include "definitions.h"
 
@@ -9,6 +11,6 @@ void peek(BufferAllocator& ba);
 void pop(BufferAllocator& ba);
 
 
-void insert(BufferAllocator& ba, KeyId key, BlockID value);
+std::optional<BlockID> insert(BufferAllocator& ba, KeyId key, BlockID value);
 BlockID lookup(BufferAllocator& ba, KeyId key);
 BlockID remove(BufferAllocator& ba, KeyId key);

@@ -48,6 +48,9 @@ struct InsertPropagation {
 	BlockID right { 0 };
 	// set on non split
 	BlockID update { 0 };
+
+	bool did_replace { false };
+	BlockID replaced { 0 };
 };
 
 InsertPropagation insert_btree(BufferAllocator& ba, std::unordered_set<BlockID>& free, BlockID id, KeyPair key_pair);

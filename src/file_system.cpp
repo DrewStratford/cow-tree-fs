@@ -1,5 +1,7 @@
 #include <cstring>
 
+#include <optional>
+
 #include "file_system.h"
 #include "page_allocator.h"
 #include "BTree.h"
@@ -104,7 +106,7 @@ BlockID remove(BufferAllocator& ba, KeyId key) {
 	return propagation.deleted_value;
 }
 
-void insert(BufferAllocator& ba, KeyId key, BlockID value) {
+std::optional<BlockID> insert(BufferAllocator& ba, KeyId key, BlockID value) {
 	auto super_block_raw = ba.load(0);
 	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
 
@@ -140,4 +142,9 @@ void insert(BufferAllocator& ba, KeyId key, BlockID value) {
 	free_pages(ba, to_free);
 	
 	super_block_raw.set_dirty();
+
+	if (propagation.did_replace) {
+		return propagation.replaced;
+	}
+	return {};
 }

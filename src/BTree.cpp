@@ -109,12 +109,21 @@ InsertPropagation insert_btree(BufferAllocator& ba, std::unordered_set<BlockID>&
 InsertPropagation insert_leaf(BufferAllocator& ba, std::unordered_set<BlockID>& freed, BTNode* node, KeyPair key_pair) {
 	std::vector<KeyPair> temp_key_pairs;
 	bool pushed = false;
+	bool did_replace = false;
+	BlockID replaced = 0;	
 	for (int i = 0; i < node->header.count; i++) {
-		if (!pushed && key_pair.key < node->pairs[i].key) {
+		if (!pushed && key_pair.key == node->pairs[i].key) {
+			pushed = true;
+			did_replace = node->pairs[i].value != key_pair.value;
+			replaced = node->pairs[i].value;
+			temp_key_pairs.push_back(key_pair);
+		} else if (!pushed && key_pair.key < node->pairs[i].key) {
 			pushed = true;
 			temp_key_pairs.push_back(key_pair);
+			temp_key_pairs.push_back(node->pairs[i]);
+		} else {
+			temp_key_pairs.push_back(node->pairs[i]);
 		}
-		temp_key_pairs.push_back(node->pairs[i]);
 	}
 	if (!pushed) {
 		temp_key_pairs.push_back(key_pair);
@@ -138,6 +147,8 @@ InsertPropagation insert_leaf(BufferAllocator& ba, std::unordered_set<BlockID>& 
 		return InsertPropagation {
 			.is_split = false,
 			.update = new_leaf_raw.id(),
+			.did_replace = did_replace,
+			.replaced = replaced,
 		};
 	} else {
 		//perform a split
@@ -172,6 +183,8 @@ InsertPropagation insert_leaf(BufferAllocator& ba, std::unordered_set<BlockID>& 
 			.key = promoting,
 			.left = new_left_raw.id(),
 			.right = new_right_raw.id(),
+			.did_replace = did_replace,
+			.replaced = replaced,
 		};
 	}
 }
@@ -237,6 +250,8 @@ InsertPropagation insert_node(BufferAllocator& ba, std::unordered_set<BlockID>& 
 				.key = promoting.key,
 				.left = new_left_raw.id(),
 				.right = new_right_raw.id(),
+				.did_replace = insert_prop.did_replace,
+				.replaced = insert_prop.replaced,
 			};
 			
 		} else { 
@@ -255,6 +270,8 @@ InsertPropagation insert_node(BufferAllocator& ba, std::unordered_set<BlockID>& 
 			return InsertPropagation {
 				.is_split = false,
 				.update = new_node_raw.id(),
+				.did_replace = insert_prop.did_replace,
+				.replaced = insert_prop.replaced,
 			};
 		}
 
@@ -269,6 +286,8 @@ InsertPropagation insert_node(BufferAllocator& ba, std::unordered_set<BlockID>& 
 		return InsertPropagation {
 			.is_split = false,
 			.update = new_node_raw.id(),
+			.did_replace = insert_prop.did_replace,
+			.replaced = insert_prop.replaced,
 		};
 	}
 }
