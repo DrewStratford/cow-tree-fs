@@ -49,19 +49,11 @@ BufferPointer clone_node(BufferAllocator& ba, BTNode* old_node) {
 }
 
 bool BTNode::enough_entries() {
-	if (this->header.is_leaf) {
-		return this->header.count >= MAX_KEY_PAIRS/2;
-	} else {
-		return this->header.count >= (MAX_KEY_PAIRS-1)/2;
-	}
+	return this->header.count >= MAX_KEY_PAIRS/2;
 }
 
 bool BTNode::can_share_entry(){
-	if (this->header.is_leaf) {
-		return this->header.count >= (MAX_KEY_PAIRS/2)+1;
-	} else {
-		return this->header.count >= ((MAX_KEY_PAIRS-1)/2)+1;
-	}
+	return this->header.count >= (MAX_KEY_PAIRS/2)+1;
 }
 
 BlockID search_btree(BufferAllocator& ba, BlockID id, KeyId key) {
