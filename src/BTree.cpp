@@ -56,7 +56,7 @@ bool BTNode::can_share_entry(){
 	return this->header.count >= (MAX_KEY_PAIRS/2)+1;
 }
 
-BlockID search_btree(BufferAllocator& ba, BlockID id, KeyId key) {
+std::optional<BlockID> search_btree(BufferAllocator& ba, BlockID id, KeyId key) {
 	auto node_raw = ba.load(id);
 	auto node = (BTNode*)node_raw.data();
 
@@ -67,18 +67,19 @@ BlockID search_btree(BufferAllocator& ba, BlockID id, KeyId key) {
 	}
 }
 
-BlockID search_leaf(BTNode* node, KeyId key) {
+std::optional<BlockID> search_leaf(BTNode* node, KeyId key) {
 	for (int i = 0; i < node->header.count; i++) {
 		if (node->pairs[i].key == key) {
-			return node->pairs[i].value;
+			auto resp = node->pairs[i].value;
+			return resp;
 		}
 	}
-	return -1;
+	return {};
 }
 
-BlockID search_node(BufferAllocator& ba, BTNode* node, KeyId key) {
+std::optional<BlockID> search_node(BufferAllocator& ba, BTNode* node, KeyId key) {
 	if (node->header.count < 1 ) {
-		return -1;
+		return {};
 	}
 
 	int i = 0;
@@ -88,7 +89,7 @@ BlockID search_node(BufferAllocator& ba, BTNode* node, KeyId key) {
 			return search_btree(ba, subleaf_id, key);
 		}
 	}
-	return -1;
+	return {};
 }
 
 InsertPropagation insert_btree(BufferAllocator& ba, std::unordered_set<BlockID>& freed, BlockID id, KeyPair key_pair) {

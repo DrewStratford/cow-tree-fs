@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unordered_set>
+#include <optional>
 
 #include "buffer_allocator.h"
 #include "definitions.h"
@@ -36,9 +37,9 @@ BufferPointer new_empty_node(BufferAllocator& ba);
 
 BufferPointer clone_node(BufferAllocator& ba, BTNode* node);
 
-BlockID search_btree(BufferAllocator& ba, BlockID id, KeyId key);
-BlockID search_leaf(BTNode* node, KeyId key);
-BlockID search_node(BufferAllocator& ba, BTNode* node, KeyId key);
+std::optional<BlockID> search_btree(BufferAllocator& ba, BlockID id, KeyId key);
+std::optional<BlockID> search_leaf(BTNode* node, KeyId key);
+std::optional<BlockID> search_node(BufferAllocator& ba, BTNode* node, KeyId key);
 
 struct InsertPropagation {
 	bool is_split { false };

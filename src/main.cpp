@@ -115,14 +115,14 @@ void test_delete_random(int amount, int to_delete) {
 		auto res = lookup(ba, i);
 		if (i == res && deletes.count(i) == 0)
 			success++;
-		if (-1 == res && deletes.count(i) == 0)
+		if (!res.has_value() && deletes.count(i) == 0)
 			printf("failed to lookup %d\n", i);
 	}
 	printf("successful lookups %d\n", success);
 
 	int success_deletes = 0;
 	for(auto d : deletes) {
-		if (-1 == lookup(ba, d)) success_deletes++;
+		if (!lookup(ba, d).has_value()) success_deletes++;
 	}
 	printf("successful deletes %d\n", success_deletes);
 }
@@ -154,14 +154,22 @@ int main(int argc, char** argv) {
 		BufferAllocator ba (f, 20);
 		int key = std::atoi(argv[2]);
 		auto res = lookup(ba, key);
-		printf("found %ld\n", res);
+		if (res.has_value()) {
+			printf("found %ld\n", res.value());
+		} else {
+			printf("not found\n");
+		}
 	} else if(strcmp(argv[1], "remove") == 0) {
 		FILE* f = fopen("test.dat", "r+");
 		if (!f) return -1;
 		BufferAllocator ba (f, 20);
 		int key = std::atoi(argv[2]);
 		auto res = remove(ba, key);
-		printf("removed %ld\n", res);
+		if (res.has_value()) {
+			printf("removed %ld\n", res.value());
+		} else {
+			printf("not found\n");
+		}
 	} else if(strcmp(argv[1], "test_seq") == 0) {
 		int amount = std::atoi(argv[2]);
 		test_insert_sequential(amount);

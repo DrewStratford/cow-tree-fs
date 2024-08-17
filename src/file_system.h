@@ -12,5 +12,5 @@ void pop(BufferAllocator& ba);
 
 
 std::optional<BlockID> insert(BufferAllocator& ba, KeyId key, BlockID value);
-BlockID lookup(BufferAllocator& ba, KeyId key);
-BlockID remove(BufferAllocator& ba, KeyId key);
+std::optional<BlockID> lookup(BufferAllocator& ba, KeyId key);
+std::optional<BlockID> remove(BufferAllocator& ba, KeyId key);

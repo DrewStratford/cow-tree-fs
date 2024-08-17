@@ -24,7 +24,7 @@ void create_file_system(BufferAllocator& ba, size_t total_pages) {
 	sb->tree_root = initial_root.id();
 }
 
-BlockID lookup(BufferAllocator& ba, KeyId key) {
+std::optional<BlockID> lookup(BufferAllocator& ba, KeyId key) {
 	auto super_block_raw = ba.load(0);
 	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
 
@@ -32,7 +32,7 @@ BlockID lookup(BufferAllocator& ba, KeyId key) {
 	return result;
 }
 
-BlockID remove(BufferAllocator& ba, KeyId key) {
+std::optional<BlockID> remove(BufferAllocator& ba, KeyId key) {
 	auto super_block_raw = ba.load(0);
 	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
 
@@ -41,7 +41,6 @@ BlockID remove(BufferAllocator& ba, KeyId key) {
 	auto propagation = delete_btree(ba, to_free, super_block->tree_root, key);
 
 	if (propagation.did_modify) {
-		// TODO: consider root with only one item.
 		auto new_root_raw = propagation.new_child;
 		auto new_root = (BTNode*) new_root_raw.data();
 		if (!new_root->header.is_leaf && new_root->header.count == 1) {
@@ -52,9 +51,10 @@ BlockID remove(BufferAllocator& ba, KeyId key) {
 		}
 		free_pages(ba, to_free);
 		super_block_raw.set_dirty();
+		return propagation.deleted_value;
 	}
 
-	return propagation.deleted_value;
+	return {};
 }
 
 std::optional<BlockID> insert(BufferAllocator& ba, KeyId key, BlockID value) {
