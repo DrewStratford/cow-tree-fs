@@ -11,30 +11,30 @@ BufferAllocator::BufferAllocator(FILE* file, size_t capacity) : m_file(file), m_
 
 	// set up pages in a free list
 	m_free = &m_tags[0];
-	for (int i = 0; i < m_capacity-1; i++) {
+	for (size_t i = 0; i < m_capacity-1; i++) {
 		m_tags[i].next = &m_tags[i+1];
 	}
 	// Set up the index (we could be smarter and use point arith).
-	for(int i = 0; i < m_capacity; i++) {
+	for(size_t i = 0; i < m_capacity; i++) {
 		m_tags[i].index = i;
 	}
 }
 
-BlockID BufferAllocator::get_id(int index) {
+BlockID BufferAllocator::get_id(size_t index) {
 	if (index < 0 || m_capacity <= index)
-		return -1;
+		return -1; // TODO: handle bad argument
 	auto tag = &m_tags[index];
 	return tag->offset;
 }
 
-void BufferAllocator::set_dirty(int index) {
+void BufferAllocator::set_dirty(size_t index) {
 	if (index < 0 || m_capacity <= index)
 		return;
 	auto tag = &m_tags[index];
 	tag->dirty = true;
 }
 
-int BufferAllocator::allocate() {
+size_t BufferAllocator::allocate() {
 	// TODO: handle oom
 	if (!m_free) return -1;
 
@@ -44,7 +44,7 @@ int BufferAllocator::allocate() {
 	return tag->index;
 }
 
-void BufferAllocator::unallocate(int index) {
+void BufferAllocator::unallocate(size_t index) {
 	if (index < 0 || m_capacity <= index)
 		return;
 
@@ -59,7 +59,7 @@ void BufferAllocator::unallocate(int index) {
 	m_free = tag;
 }
 
-int BufferAllocator::obtain(int index) {
+size_t BufferAllocator::obtain(size_t index) {
 	if (index < 0 || m_capacity <= index)
 		return -1;
 	auto tag = &m_tags[index];
@@ -67,13 +67,13 @@ int BufferAllocator::obtain(int index) {
 	return index;
 }
 
-char* BufferAllocator::get_buffer(int index) {
+char* BufferAllocator::get_buffer(size_t index) {
 	if (index < 0 || m_capacity <= index)
 		return nullptr;
 	return m_buffers + (index * PAGE_SIZE);
 }
 
-void BufferAllocator::release(int index) {
+void BufferAllocator::release(size_t index) {
 	if (index < 0 || m_capacity <= index)
 		return;
 
@@ -111,7 +111,7 @@ BufferPointer BufferAllocator::load(size_t offset) {
 	return BufferPointer(*this, idx, buffer);
 }
 
-void BufferAllocator::flush(int index) {
+void BufferAllocator::flush(size_t index) {
 	if (index < 0 || m_capacity <= index)
 		return;
 

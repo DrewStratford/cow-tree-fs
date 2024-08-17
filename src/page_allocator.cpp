@@ -4,11 +4,7 @@
 
 
 void initiate_page_allocator(BufferAllocator& ba, int total_pages) {
-	auto super_block_raw = ba.load(0);
-	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
-
 	// TODO: do we actually need this function?
-
 }
 
 BufferPointer allocate_page(BufferAllocator& ba) {

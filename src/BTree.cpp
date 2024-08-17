@@ -13,7 +13,7 @@ BufferPointer new_empty_leaf(BufferAllocator& ba) {
 		}
 	};
 
-	for (int i = 0; i < MAX_KEY_PAIRS; i++) {
+	for (size_t i = 0; i < MAX_KEY_PAIRS; i++) {
 		node->pairs[i].key = MAX_KEY_ID;
 	}
 
@@ -31,7 +31,7 @@ BufferPointer new_empty_node(BufferAllocator& ba) {
 		}
 	};
 
-	for (int i = 0; i < MAX_KEY_PAIRS; i++) {
+	for (size_t i = 0; i < MAX_KEY_PAIRS; i++) {
 		node->pairs[i].key = MAX_KEY_ID;
 	}
 
@@ -68,7 +68,7 @@ std::optional<BlockID> search_btree(BufferAllocator& ba, BlockID id, KeyId key) 
 }
 
 std::optional<BlockID> search_leaf(BTNode* node, KeyId key) {
-	for (int i = 0; i < node->header.count; i++) {
+	for (size_t i = 0; i < node->header.count; i++) {
 		if (node->pairs[i].key == key) {
 			auto resp = node->pairs[i].value;
 			return resp;
@@ -82,7 +82,7 @@ std::optional<BlockID> search_node(BufferAllocator& ba, BTNode* node, KeyId key)
 		return {};
 	}
 
-	int i = 0;
+	size_t i = 0;
 	for (; i < node->header.count; i++) {
 		if (key < node->pairs[i].key) {
 			BlockID subleaf_id = node->pairs[i].value;
@@ -112,7 +112,7 @@ InsertPropagation insert_leaf(BufferAllocator& ba, std::unordered_set<BlockID>& 
 	bool pushed = false;
 	bool did_replace = false;
 	BlockID replaced = 0;	
-	for (int i = 0; i < node->header.count; i++) {
+	for (size_t i = 0; i < node->header.count; i++) {
 		if (!pushed && key_pair.key == node->pairs[i].key) {
 			pushed = true;
 			did_replace = node->pairs[i].value != key_pair.value;
@@ -139,7 +139,7 @@ InsertPropagation insert_leaf(BufferAllocator& ba, std::unordered_set<BlockID>& 
 		new_leaf->header.count = temp_key_pairs.size();
 		new_leaf->header.is_leaf = true;
 
-		for (int i = 0; i < temp_key_pairs.size(); i++) {
+		for (size_t i = 0; i < temp_key_pairs.size(); i++) {
 			new_leaf->pairs[i] = temp_key_pairs[i];
 		}
 
@@ -162,7 +162,7 @@ InsertPropagation insert_leaf(BufferAllocator& ba, std::unordered_set<BlockID>& 
 		new_left->header.is_leaf = true;
 
 		// TODO: consider the split here
-		for (int i = 0; i < split_at; i++) {
+		for (size_t i = 0; i < split_at; i++) {
 			new_left->pairs[i] = temp_key_pairs[i];
 			new_left->header.count++;
 		}
@@ -171,7 +171,7 @@ InsertPropagation insert_leaf(BufferAllocator& ba, std::unordered_set<BlockID>& 
 		auto new_right = (BTNode*)new_right_raw.data();
 		new_right->header.is_leaf = true;
 
-		for (int i = split_at; i < temp_key_pairs.size(); i++) {
+		for (size_t i = split_at; i < temp_key_pairs.size(); i++) {
 			new_right->pairs[i-split_at] = temp_key_pairs[i];
 			new_right->header.count++;
 		}
@@ -192,7 +192,7 @@ InsertPropagation insert_leaf(BufferAllocator& ba, std::unordered_set<BlockID>& 
 
 InsertPropagation insert_node(BufferAllocator& ba, std::unordered_set<BlockID>& freed, BTNode* node, KeyPair key_pair) {
 
-	int i = 0;
+	size_t i = 0;
 	for (; i < node->header.count; i++) {
 		if (key_pair.key < node->pairs[i].key) {
 			break;
@@ -204,7 +204,7 @@ InsertPropagation insert_node(BufferAllocator& ba, std::unordered_set<BlockID>& 
 
 	if (insert_prop.is_split) {
 		std::vector<KeyPair> temp_key_pairs;
-		for (int j = 0; j < node->header.count; j++) {
+		for (size_t j = 0; j < node->header.count; j++) {
 			// also push in the insertee
 			if (j == i) {
 				temp_key_pairs.push_back(KeyPair {
@@ -229,7 +229,7 @@ InsertPropagation insert_node(BufferAllocator& ba, std::unordered_set<BlockID>& 
 			auto new_left = (BTNode*)new_left_raw.data();
 
 			// TODO: consider the split here
-			for (int i = 0; i <= split_at; i++) {
+			for (size_t i = 0; i <= split_at; i++) {
 				new_left->pairs[i] = temp_key_pairs[i];
 				new_left->header.count++;
 			}
@@ -238,7 +238,7 @@ InsertPropagation insert_node(BufferAllocator& ba, std::unordered_set<BlockID>& 
 			auto new_right_raw = new_empty_node(ba);
 			auto new_right = (BTNode*)new_right_raw.data();
 
-			for (int i = split_at+1; i < temp_key_pairs.size(); i++) {
+			for (size_t i = split_at+1; i < temp_key_pairs.size(); i++) {
 				new_right->pairs[i-(split_at+1)] = temp_key_pairs[i];
 				new_right->header.count++;
 			}
@@ -262,7 +262,7 @@ InsertPropagation insert_node(BufferAllocator& ba, std::unordered_set<BlockID>& 
 			auto new_node = (BTNode*)new_node_raw.data();
 			new_node->header.count = temp_key_pairs.size();
 
-			for (int i = 0; i < temp_key_pairs.size(); i++) {
+			for (size_t i = 0; i < temp_key_pairs.size(); i++) {
 				new_node->pairs[i] = temp_key_pairs[i];
 			}
 
@@ -364,7 +364,7 @@ DeletePropagation delete_leaf(BufferAllocator& ba, std::unordered_set<BlockID>& 
 	// check if node actually contains the key
 	bool found = false;
 	BlockID deleted_value = 0;
-	for(int i = 0; i < node->header.count; i++) {
+	for(size_t i = 0; i < node->header.count; i++) {
 		if (node->pairs[i].key == key) {
 			found = true;
 			deleted_value = node->pairs[i].value;
@@ -379,8 +379,8 @@ DeletePropagation delete_leaf(BufferAllocator& ba, std::unordered_set<BlockID>& 
 	auto new_leaf_raw = new_empty_leaf(ba);
 	auto new_leaf = (BTNode*)new_leaf_raw.data();
 
-	int j = 0;
-	for (int i = 0; i < node->header.count; i++) {
+	size_t j = 0;
+	for (size_t i = 0; i < node->header.count; i++) {
 		if (node->pairs[i].key == key) continue;
 		new_leaf->pairs[j] = node->pairs[i];
 		j++;
@@ -399,7 +399,7 @@ DeletePropagation delete_leaf(BufferAllocator& ba, std::unordered_set<BlockID>& 
 DeletePropagation delete_merge(BufferAllocator& ba,
 		std::unordered_set<BlockID>& freed,
 		BTNode* root, BTNode* left, BTNode* right,
-		int left_idx, int right_idx,
+		size_t left_idx, size_t right_idx,
 		BlockID deleted_value) {
 
 	auto right_key = root->pairs[right_idx].key;
@@ -409,13 +409,13 @@ DeletePropagation delete_merge(BufferAllocator& ba,
 	auto new_node_raw = are_leaves ? new_empty_leaf(ba) : new_empty_node(ba);
 	auto new_node = (BTNode*)new_node_raw.data();
 
-	for (int i = 0; i < left->header.count; i++, new_node->header.count++) {
+	for (size_t i = 0; i < left->header.count; i++, new_node->header.count++) {
 		new_node->pairs[new_node->header.count] = left->pairs[i];
 	}
 	if (!are_leaves && new_node->header.count > 0) {
 		new_node->pairs[new_node->header.count-1].key = left_key;
 	}
-	for (int i = 0; i < right->header.count; i++, new_node->header.count++) {
+	for (size_t i = 0; i < right->header.count; i++, new_node->header.count++) {
 		new_node->pairs[new_node->header.count] = right->pairs[i];
 	}
 
@@ -423,8 +423,8 @@ DeletePropagation delete_merge(BufferAllocator& ba,
 	auto new_root_raw = new_empty_node(ba);
 	auto new_root = (BTNode*)new_root_raw.data();
 
-	for (int i = 0; i < root->header.count; i++) {
-		int j = new_root->header.count;
+	for (size_t i = 0; i < root->header.count; i++) {
+		size_t j = new_root->header.count;
 		if (i == right_idx) continue;
 		else if (i == left_idx) {
 			new_root->pairs[j].key = right_key;
@@ -474,7 +474,7 @@ DeletePropagation move_from_right(BufferAllocator& ba,
 	// shift right to the left.
 	auto new_right_raw = are_leaves ? new_empty_leaf(ba) : new_empty_node(ba);
 	auto new_right = (BTNode*)new_right_raw.data();
-	for (int i = 0; i < right->header.count-1; i++) {
+	for (size_t i = 0; i < right->header.count-1; i++) {
 		new_right->pairs[i] = right->pairs[i+1];
 		new_right->header.count++;
 	}
@@ -523,7 +523,7 @@ DeletePropagation move_from_left(BufferAllocator& ba,
 		new_node->pairs[0].key = left_key;
 	}
 	new_node->header.count++;
-	for(int i = 0; i < node->header.count; i++) {
+	for(size_t i = 0; i < node->header.count; i++) {
 		new_node->pairs[1+i] = node->pairs[i];
 		new_node->header.count++;
 	}
@@ -565,7 +565,7 @@ DeletePropagation move_from_left(BufferAllocator& ba,
 
 DeletePropagation delete_node(BufferAllocator& ba, std::unordered_set<BlockID>& free, BTNode* node, KeyId key) {
 
-	int idx = 0;
+	size_t idx = 0;
 	for (; idx < node->header.count; idx++) {
 		if (key < node->pairs[idx].key) {
 			break;
@@ -603,7 +603,7 @@ DeletePropagation delete_node(BufferAllocator& ba, std::unordered_set<BlockID>& 
 	}
 
 	int left_idx = idx - 1;
-	int right_idx = idx + 1;
+	size_t right_idx = idx + 1;
 
 	// only left neighbour (2,4)
 	if (right_idx >= node->header.count) {

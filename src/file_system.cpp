@@ -36,7 +36,6 @@ std::optional<BlockID> remove(BufferAllocator& ba, KeyId key) {
 	auto super_block_raw = ba.load(0);
 	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
 
-	auto old_root = super_block->tree_root;
 	std::unordered_set<BlockID> to_free;
 	auto propagation = delete_btree(ba, to_free, super_block->tree_root, key);
 

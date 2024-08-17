@@ -26,34 +26,34 @@ class BufferAllocator {
 		BufferTag* m_tags { nullptr };
 		char* m_buffers { nullptr };
 
-		std::unordered_map<size_t, int> m_offset_to_index;
+		std::unordered_map<size_t, size_t> m_offset_to_index;
 
-		int allocate();
-		void unallocate(int index);
+		size_t allocate();
+		void unallocate(size_t index);
 
-		void evict(int index);
+		void evict(size_t index);
 
 	public:
 		BufferAllocator(FILE* file, size_t capacity);
 
 		
 		BufferPointer load(size_t offset);
-		void flush(int index);
+		void flush(size_t index);
 
-		char* get_buffer(int index);
-		int obtain(int index);
-		void release(int index);
+		char* get_buffer(size_t index);
+		size_t obtain(size_t index);
+		void release(size_t index);
 
-		BlockID get_id(int index);
+		BlockID get_id(size_t index);
 
-		void set_dirty(int index);
+		void set_dirty(size_t index);
 };
 
 class BufferPointer {
 	private:
-		int m_index { 0 };
-		char *m_buffer { nullptr };
 		BufferAllocator* m_allocator { nullptr };
+		size_t m_index { 0 };
+		char *m_buffer { nullptr };
 	
 	public:
 		BufferPointer() {};
