@@ -143,6 +143,7 @@ int main(int argc, char** argv) {
 		if (!f) return -1;
 		BufferAllocator ba (f, 20);
 		create_file_system(ba, 1000);
+		create_root_directory(ba);
 		// BTREE STUFF
 	} else if(strcmp(argv[1], "insert") == 0) {
 		FILE* f = fopen("test.dat", "r+");
@@ -176,6 +177,25 @@ int main(int argc, char** argv) {
 		} else {
 			printf("not found\n");
 		}
+		// FS stuff
+	} else if (strcmp(argv[1], "ls") == 0) {
+		FILE* f = fopen("test.dat", "r+");
+		if (!f) return -1;
+		BufferAllocator ba (f, 20);
+		int key = std::atoi(argv[2]);
+		list_directory(ba, key);
+	} else if (strcmp(argv[1], "add_dir") == 0) {
+		FILE* f = fopen("test.dat", "r+");
+		if (!f) return -1;
+		BufferAllocator ba (f, 20);
+		int key = std::atoi(argv[2]);
+		auto res = add_directory(ba, key, argv[3]);
+		if (res.has_value()) {
+			printf("created directory %ld\n", res.value());
+		} else { 
+			printf("couldn't create directory\n");
+		}
+		// Test stuff
 	} else if(strcmp(argv[1], "test_seq") == 0) {
 		int amount = std::atoi(argv[2]);
 		test_insert_sequential(amount);

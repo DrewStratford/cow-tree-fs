@@ -98,3 +98,122 @@ std::optional<BlockID> insert(BufferAllocator& ba, KeyId key, BlockID value) {
 	}
 	return {};
 }
+
+/*
+ * Directory stuff
+ */
+
+void Directory::insert_file(char* name, FSType type, BlockID block) {
+	// TODO: this is totally unsafe
+	auto dir_ent = (DirEntry*)&data[size];
+	dir_ent->data = block;
+	dir_ent->name_len = strlen(name);
+	dir_ent->type = type;
+	memcpy(dir_ent->name, name, dir_ent->name_len);
+	size += sizeof(DirEntry) + dir_ent->name_len;
+}
+
+std::optional<KeyId> Directory::lookup_file(char* name) {
+	auto name_len = strlen(name);
+	DirEntry* dir_ent = nullptr;
+	for (size_t i = 0; i < this->size; i+= sizeof(DirEntry) + dir_ent->name_len) {
+		dir_ent = (DirEntry*)&data[size];
+		if (strncmp(name, dir_ent->name, name_len) == 0) {
+			auto out = dir_ent->data;
+			return out;
+		}
+	}
+	return {};
+}
+
+void Directory::list_contents() {
+	DirEntry* dir_ent = nullptr;
+	for (size_t i = 0; i < this->size; i+= sizeof(DirEntry) + dir_ent->name_len) {
+		dir_ent = (DirEntry*)&data[i];
+		switch (dir_ent->type) {
+			case Unknown:
+				printf("U\t");
+				break;
+			case SmallDir:
+				printf("D\t");
+				break;
+			case SmallFile:
+				printf("F\t");
+				break;
+		}
+		printf("%ld, %.*s\n", 
+				dir_ent->data, (int)dir_ent->name_len, dir_ent->name);
+	}
+}
+
+void list_directory(BufferAllocator& ba, KeyId key) {
+	auto parent_block = lookup(ba, key);
+	if (!parent_block.has_value()) {
+		return;
+	}
+
+	auto parent_raw = ba.load(parent_block.value());
+	auto parent = (Directory*)parent_raw.data();
+	parent->list_contents();
+}
+
+void create_root_directory(BufferAllocator& ba) {
+	auto super_block_raw = ba.load(0);
+	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
+
+	KeyId new_key = 0; // root is hardcoded to key 0
+	super_block->next_key++;
+
+	auto new_dir_raw = allocate_page(ba);
+	auto new_dir = (Directory*)new_dir_raw.data();
+	*new_dir = Directory{
+		.header {
+			.key = new_key,
+			.block = new_dir_raw,
+			.type = SmallDir,
+		},
+	};
+	
+	insert(ba, new_key, new_dir_raw.id());
+
+	super_block_raw.set_dirty();
+}
+
+std::optional<KeyId> add_directory(BufferAllocator& ba, KeyId parent_key, char* name) {
+	auto super_block_raw = ba.load(0);
+	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
+
+	auto parent_block = lookup(ba, parent_key);
+	if (!parent_block.has_value()) {
+		return {};
+	}
+
+	auto parent_raw_old = ba.load(parent_block.value());
+	auto parent_raw = allocate_page(ba);
+	memcpy(parent_raw.data(), parent_raw_old.data(), PAGE_SIZE);
+	auto parent = (Directory*)parent_raw.data();
+	parent->header.block = parent_raw.id();
+	// TODO: check parent type
+
+	auto new_key = super_block->next_key;
+	super_block->next_key++;
+
+	auto new_dir_raw = allocate_page(ba);
+	auto new_dir = (Directory*)new_dir_raw.data();
+	*new_dir = Directory{
+		.header {
+			.key = new_key,
+			.block = new_dir_raw,
+			.type = SmallDir,
+		},
+	};
+
+	parent->insert_file(name, SmallDir, new_key);
+	insert(ba, parent_key, parent_raw.id());
+	insert(ba, new_key, new_dir_raw.id());
+	new_dir_raw.set_dirty();
+	parent_raw.set_dirty();
+
+	super_block_raw.set_dirty();
+	return new_key;
+}

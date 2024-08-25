@@ -29,20 +29,6 @@ using KeyId = uint64_t;
 const KeyId MAX_KEY_ID = std::numeric_limits<uint64_t>::max();
 
 
-// General object header
-enum Type { Unknown, Test, Node, Dir, File};
-struct [[gnu::packed]] Header {
-	KeyId key { 0 };
-	BlockID block { 0 };
-	Type type { Unknown };
-};
-
-// Test item
-const size_t TEST_DATA_SIZE = (PAGE_SIZE - sizeof(Header)) / sizeof(char);
-struct [[gnu::packed]] TestNodeHeader {
-	Header header;
-	char data[];
-};
 
 struct [[gnu::packed]] SuperBlock {
 	BlockID next_key { 0 };
