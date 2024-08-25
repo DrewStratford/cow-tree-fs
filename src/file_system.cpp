@@ -217,3 +217,96 @@ std::optional<KeyId> add_directory(BufferAllocator& ba, KeyId parent_key, char* 
 	super_block_raw.set_dirty();
 	return new_key;
 }
+
+std::optional<KeyId> add_file(BufferAllocator& ba, KeyId parent_key, char* name) {
+	auto super_block_raw = ba.load(0);
+	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
+
+	auto parent_block = lookup(ba, parent_key);
+	if (!parent_block.has_value()) {
+		return {};
+	}
+
+	auto parent_raw_old = ba.load(parent_block.value());
+	auto parent_raw = allocate_page(ba);
+	memcpy(parent_raw.data(), parent_raw_old.data(), PAGE_SIZE);
+	auto parent = (Directory*)parent_raw.data();
+	parent->header.block = parent_raw.id();
+	// TODO: check parent type
+
+	auto new_key = super_block->next_key;
+	super_block->next_key++;
+
+	auto new_file_raw = allocate_page(ba);
+	auto new_file = (File*)new_file_raw.data();
+	*new_file = File{
+		.header {
+			.key = new_key,
+			.block = new_file_raw,
+			.type = SmallFile,
+		},
+	};
+
+	parent->insert_file(name, SmallFile, new_key);
+	insert(ba, parent_key, parent_raw.id());
+	insert(ba, new_key, new_file_raw.id());
+	new_file_raw.set_dirty();
+	parent_raw.set_dirty();
+
+	super_block_raw.set_dirty();
+	return new_key;
+}
+
+void read_file(BufferAllocator& ba, KeyId key) {
+
+	auto file_raw_old_ = lookup(ba, key);
+	if (!file_raw_old_.has_value()) {
+		return;
+	}
+	auto file_raw_old = ba.load(file_raw_old_.value());
+	auto file = (File*)file_raw_old.data();
+	file->read();
+}
+
+void write_file(BufferAllocator& ba, KeyId key,
+		char* data, size_t len, size_t pos) {
+
+	auto file_raw_old_ = lookup(ba, key);
+	if (!file_raw_old_.has_value()) {
+		return;
+	}
+	auto file_raw_old = ba.load(file_raw_old_.value());
+
+	auto file_raw = allocate_page(ba);
+	memcpy(file_raw.data(), file_raw_old.data(), PAGE_SIZE);
+	auto file = (File*)file_raw.data();
+
+	file->write(data, len, pos);
+	file_raw.set_dirty();
+
+	insert(ba, key, file_raw.id());
+}
+
+void File::write(char* data, size_t len, size_t pos) {
+	// TODO: this is unsafe
+	
+	//make room for data
+	for (size_t i = MAX_FILE_DATA-1; i > pos; i--) {
+		this->data[i] = this->data[i-pos];
+	}
+
+	for (size_t i = pos; i < len && i < MAX_FILE_DATA; i++) {
+		this->data[i] = data[i-pos];
+	}
+	this->size+= len;
+};
+
+void File::append(char* data, size_t len) {
+	this->write(data, len, this->size);
+};
+
+void File::read() {
+	// This is unsafe
+	printf("%.*s\n", (int)this->size, this->data);
+};
+

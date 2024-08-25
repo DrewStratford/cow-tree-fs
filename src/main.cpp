@@ -195,6 +195,32 @@ int main(int argc, char** argv) {
 		} else { 
 			printf("couldn't create directory\n");
 		}
+	} else if (strcmp(argv[1], "add_file") == 0) {
+		FILE* f = fopen("test.dat", "r+");
+		if (!f) return -1;
+		BufferAllocator ba (f, 20);
+		int key = std::atoi(argv[2]);
+		auto res = add_file(ba, key, argv[3]);
+		if (res.has_value()) {
+			printf("created file %ld\n", res.value());
+		} else { 
+			printf("couldn't create file\n");
+		}
+	} else if (strcmp(argv[1], "write_file") == 0) {
+		FILE* f = fopen("test.dat", "r+");
+		if (!f) return -1;
+		BufferAllocator ba (f, 20);
+		int key = std::atoi(argv[2]);
+		int offset = std::atoi(argv[3]);
+		int len = strlen(argv[4]);
+		write_file(ba, key, argv[4], len, offset);
+	} else if (strcmp(argv[1], "read_file") == 0) {
+		FILE* f = fopen("test.dat", "r+");
+		if (!f) return -1;
+		BufferAllocator ba (f, 20);
+		int key = std::atoi(argv[2]);
+		read_file(ba, key);
+
 		// Test stuff
 	} else if(strcmp(argv[1], "test_seq") == 0) {
 		int amount = std::atoi(argv[2]);
