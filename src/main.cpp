@@ -1,8 +1,4 @@
 
-#define FUSE_USE_VERSION 31
-#define _FILE_OFFSET_BITS 64
-
-#include <fuse.h>
 
 #include "buffer_allocator.h"
 
@@ -133,10 +129,12 @@ void test_delete_random(int amount, int to_delete) {
 	printf("successful deletes %d\n", success_deletes);
 }
 
+
+
 int main(int argc, char** argv) {
 	if (argc < 2) return 0;
 
-
+	return fuse_start(argc, argv);
 
 	if(strcmp(argv[1], "init") == 0){
 		FILE* f = fopen("test.dat", "r+");
@@ -220,6 +218,13 @@ int main(int argc, char** argv) {
 		BufferAllocator ba (f, 20);
 		int key = std::atoi(argv[2]);
 		read_file(ba, key);
+	} else if (strcmp(argv[1], "inspect") == 0) {
+		FILE* f = fopen("test.dat", "r+");
+		if (!f) return -1;
+		BufferAllocator ba (f, 20);
+		int key = std::atoi(argv[2]);
+		inspect_block(ba, key);
+	} else if (strcmp(argv[1], "fuse") == 0) {
 
 		// Test stuff
 	} else if(strcmp(argv[1], "test_seq") == 0) {

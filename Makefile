@@ -1,5 +1,5 @@
 INCLUDE_FLAGS := -I. 
-CPPFLAGS := -ggdb3 $(INCLUDE_FLAGS) -Wall -std=gnu++2a `pkg-config fuse --libs`
+CPPFLAGS := -ggdb3 $(INCLUDE_FLAGS) -Wall -std=gnu++2a  -lfuse3
 CC := g++
 
 .PHONY: run clean all install
