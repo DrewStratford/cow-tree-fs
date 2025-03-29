@@ -1,5 +1,7 @@
 //#define FUSE_USE_VERSION 31
+#include "buffer_allocator.h"
 #include "definitions.h"
+
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
 #define _FILE_OFFSET_BITS 64
 #include <fuse3/fuse_lowlevel.h>
@@ -20,9 +22,22 @@
 #include "page_allocator.h"
 #include "BTree.h"
 
+SuperBlock* get_super_block(BufferAllocator& ba) {
+	auto super_block_raw = ba.load(0);
+	// TODO: error handling
+	return  (SuperBlock*)super_block_raw.data();
+}
+
+std::pair<SuperBlock*, BufferPointer> get_super_block2(BufferAllocator& ba) {
+	auto super_block_raw = ba.load(0);
+	// TODO: error handling
+	return {(SuperBlock*)super_block_raw.data(), super_block_raw};
+}
+
+
 void create_file_system(BufferAllocator& ba, size_t total_pages) {
-	auto sb_raw = ba.load(0);
-	auto sb = (SuperBlock*)sb_raw.data();
+	auto [sb, sb_raw] = get_super_block2(ba);
+
 	// Write super block
 	*sb = SuperBlock {
 		.next_key = 1,
@@ -39,16 +54,14 @@ void create_file_system(BufferAllocator& ba, size_t total_pages) {
 }
 
 std::optional<BlockID> lookup(BufferAllocator& ba, KeyId key) {
-	auto super_block_raw = ba.load(0);
-	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
+	SuperBlock* super_block = get_super_block(ba);
 
 	auto result = search_btree(ba, super_block->tree_root, key);
 	return result;
 }
 
 std::optional<BlockID> remove(BufferAllocator& ba, KeyId key) {
-	auto super_block_raw = ba.load(0);
-	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
+	auto [super_block, super_block_raw] = get_super_block2(ba);
 
 	std::unordered_set<BlockID> to_free;
 	auto propagation = delete_btree(ba, to_free, super_block->tree_root, key);
@@ -71,8 +84,7 @@ std::optional<BlockID> remove(BufferAllocator& ba, KeyId key) {
 }
 
 std::optional<BlockID> insert(BufferAllocator& ba, KeyId key, BlockID value) {
-	auto super_block_raw = ba.load(0);
-	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
+	auto [super_block, super_block_raw] = get_super_block2(ba);
 
 	auto old_root = super_block->tree_root;
 	std::unordered_set<BlockID> to_free;
@@ -197,8 +209,7 @@ void inspect_block(BufferAllocator& ba, KeyId key) {
 }
 
 void create_root_directory(BufferAllocator& ba) {
-	auto super_block_raw = ba.load(0);
-	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
+	auto [super_block, super_block_raw] = get_super_block2(ba);
 
 	KeyId new_key = 1; // root is hardcoded to key 1
 	super_block->next_key++;
@@ -220,8 +231,7 @@ void create_root_directory(BufferAllocator& ba) {
 }
 
 std::optional<KeyId> add_directory(BufferAllocator& ba, KeyId parent_key, char* name) {
-	auto super_block_raw = ba.load(0);
-	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
+	auto [super_block, super_block_raw] = get_super_block2(ba);
 
 	auto parent_block = lookup(ba, parent_key);
 	if (!parent_block.has_value()) {
@@ -259,8 +269,7 @@ std::optional<KeyId> add_directory(BufferAllocator& ba, KeyId parent_key, char* 
 }
 
 std::optional<KeyId> add_file(BufferAllocator& ba, KeyId parent_key, char* name) {
-	auto super_block_raw = ba.load(0);
-	SuperBlock* super_block = (SuperBlock*)super_block_raw.data();
+	auto [super_block, super_block_raw] = get_super_block2(ba);
 
 	auto parent_block = lookup(ba, parent_key);
 	if (!parent_block.has_value()) {
