@@ -34,6 +34,17 @@ std::pair<SuperBlock*, BufferPointer> get_super_block2(BufferAllocator& ba) {
 	return {(SuperBlock*)super_block_raw.data(), super_block_raw};
 }
 
+template <typename T>
+std::pair<T*, BufferPointer> get_block_by_key(BufferAllocator& ba, KeyId key) {
+	auto block_id = lookup(ba, key);
+	if (!block_id.has_value()) {
+		return {nullptr, BufferPointer()};
+	}
+
+	auto block_raw = ba.load(block_id.value());
+	auto block = (T*)block_raw.data();
+	return {block, block_raw};
+}
 
 void create_file_system(BufferAllocator& ba, size_t total_pages) {
 	auto [sb, sb_raw] = get_super_block2(ba);
@@ -173,25 +184,22 @@ void Directory::list_contents() {
 }
 
 void list_directory(BufferAllocator& ba, KeyId key) {
-	auto parent_block = lookup(ba, key);
-	if (!parent_block.has_value()) {
+	auto [dir, dir_raw] = get_block_by_key<Directory>(ba, key);
+	if (!dir) {
 		return;
 	}
 
-	auto parent_raw = ba.load(parent_block.value());
-	auto parent = (Directory*)parent_raw.data();
-	parent->list_contents();
+	dir->list_contents();
 }
 
 void inspect_block(BufferAllocator& ba, KeyId key) {
+	auto [parent, parent_raw] = get_block_by_key<FSHeader>(ba, key);
 	auto parent_block = lookup(ba, key);
-	if (!parent_block.has_value()) {
+	if (!parent) {
 		printf("block does not exist\n");
 		return;
 	}
 
-	auto parent_raw = ba.load(parent_block.value());
-	auto parent = (FSHeader*)parent_raw.data();
 	printf("key id %ld\n", parent->key);
 	printf("block id %ld\n", parent->block);
 	printf("type is ");
@@ -233,14 +241,13 @@ void create_root_directory(BufferAllocator& ba) {
 std::optional<KeyId> add_directory(BufferAllocator& ba, KeyId parent_key, char* name) {
 	auto [super_block, super_block_raw] = get_super_block2(ba);
 
-	auto parent_block = lookup(ba, parent_key);
-	if (!parent_block.has_value()) {
+	auto [parent_old, parent_old_raw] = get_block_by_key<char*>(ba, parent_key);
+	if (!parent_old) {
 		return {};
 	}
 
-	auto parent_raw_old = ba.load(parent_block.value());
 	auto parent_raw = allocate_page(ba);
-	memcpy(parent_raw.data(), parent_raw_old.data(), PAGE_SIZE);
+	memcpy(parent_raw.data(), parent_old_raw.data(), PAGE_SIZE);
 	auto parent = (Directory*)parent_raw.data();
 	parent->header.block = parent_raw.id();
 	// TODO: check parent type
@@ -271,14 +278,13 @@ std::optional<KeyId> add_directory(BufferAllocator& ba, KeyId parent_key, char* 
 std::optional<KeyId> add_file(BufferAllocator& ba, KeyId parent_key, char* name) {
 	auto [super_block, super_block_raw] = get_super_block2(ba);
 
-	auto parent_block = lookup(ba, parent_key);
-	if (!parent_block.has_value()) {
+	auto [parent_old, parent_old_raw] = get_block_by_key<char*>(ba, parent_key);
+	if (!parent_old) {
 		return {};
 	}
 
-	auto parent_raw_old = ba.load(parent_block.value());
 	auto parent_raw = allocate_page(ba);
-	memcpy(parent_raw.data(), parent_raw_old.data(), PAGE_SIZE);
+	memcpy(parent_raw.data(), parent_old_raw.data(), PAGE_SIZE);
 	auto parent = (Directory*)parent_raw.data();
 	parent->header.block = parent_raw.id();
 	// TODO: check parent type
@@ -307,27 +313,23 @@ std::optional<KeyId> add_file(BufferAllocator& ba, KeyId parent_key, char* name)
 }
 
 void read_file(BufferAllocator& ba, KeyId key) {
-
-	auto file_raw_old_ = lookup(ba, key);
-	if (!file_raw_old_.has_value()) {
+	auto [file, _] = get_block_by_key<File>(ba, key);
+	if (!file) {
 		return;
 	}
-	auto file_raw_old = ba.load(file_raw_old_.value());
-	auto file = (File*)file_raw_old.data();
 	file->read();
 }
 
 void write_file(BufferAllocator& ba, KeyId key,
 		char* data, size_t len, size_t pos) {
 
-	auto file_raw_old_ = lookup(ba, key);
-	if (!file_raw_old_.has_value()) {
+	auto [file_old, _] = get_block_by_key<File>(ba, key);
+	if (!file_old) {
 		return;
 	}
-	auto file_raw_old = ba.load(file_raw_old_.value());
 
 	auto file_raw = allocate_page(ba);
-	memcpy(file_raw.data(), file_raw_old.data(), PAGE_SIZE);
+	memcpy(file_raw.data(), file_old, PAGE_SIZE);
 	auto file = (File*)file_raw.data();
 
 	file->write(data, len, pos);
@@ -387,14 +389,12 @@ static void cowfs_getattr(fuse_req_t req, fuse_ino_t ino,
 			     struct fuse_file_info *fi)
 {
 	printf("cowfs_getattr\n");
-	auto block = lookup(*global_ba, (KeyId)ino);
-	if (!block.has_value()) {
+	auto [file, _] = get_block_by_key<FSHeader>(*global_ba, (KeyId)ino);
+	if (!file) {
 		printf("block id %ld\n not found\n", ino);
 		fuse_reply_err(req, EISDIR);
 		return;
 	}
-	auto file_raw = global_ba->load(block.value());
-	auto file = (FSHeader*)file_raw.data();
 
 	printf("loaded inode %ld\n", ino);
 	struct stat e;
@@ -431,12 +431,11 @@ static void cowfs_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	printf("looking up %s\n", name);
 	std::string path = name;
 
-	auto parent_block = lookup(*global_ba, (KeyId)parent);
-	if (!parent_block.has_value()) {
+	auto [dir, _] = get_block_by_key<Directory>(*global_ba, (KeyId)parent);
+	if (!dir) {
+		// TODO: error handling
 		return;
 	}
-	auto dir_raw = global_ba->load(parent_block.value());
-	auto dir = (Directory*)dir_raw.data();
 
 	DirEntry* dir_ent = nullptr;
 	for (size_t i = 0; i < dir->size; i+= sizeof(DirEntry) + dir_ent->name_len) {
@@ -469,12 +468,10 @@ static void cowfs_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 					e.attr.st_nlink = 1;
 					// lookup file to get the length
 					{
-						auto block = lookup(*global_ba, dir_ent->data);
-						if (!block.has_value()) {
+						auto [file, _] = get_block_by_key<File>(*global_ba, dir_ent->data);
+						if (!file) {
 							// TODO: throw error
 						}
-						auto raw_file = global_ba->load(block.value());
-						auto file = (File*)raw_file.data();
 						e.attr.st_size = file->size;
 					}
 					break;
@@ -519,7 +516,6 @@ static int reply_buf_limited(fuse_req_t req, const char *buf, size_t bufsize,
 		return fuse_reply_buf(req, buf + off, std::min(bufsize - off, maxsize));
 	}
 	else {
-
 		puts("returning nothing");
 		return fuse_reply_buf(req, NULL, 0);
 	}
@@ -530,16 +526,12 @@ static void cowfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 {
 	printf("looking up dir %ld\n",ino);
 	printf("global_ba %p\n", global_ba);
-	auto parent_block = lookup(*global_ba, (KeyId)ino);
-	if (!parent_block.has_value()) {
-		printf("return nothing\n");
+	auto [dir, _] = get_block_by_key<Directory>(*global_ba, (KeyId)ino);
+	if (!dir) {
 		fuse_reply_err(req, ENOTDIR);
 		return;
 	}
 
-	printf("got parent block %ld\n", parent_block.value());
-	auto parent_raw = global_ba->load(parent_block.value());
-	auto dir = (Directory*)parent_raw.data();
 	if (dir->header.type != FSType::SmallDir) {
 		fuse_reply_err(req, ENOTDIR);
 		return;
@@ -550,7 +542,6 @@ static void cowfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	struct dirbuf b;
 	memset(&b, 0, sizeof(b));
 
-	// TODO: handle not dir
 	DirEntry* dir_ent = nullptr;
 	for (size_t i = 0; i < dir->size; i+= sizeof(DirEntry) + dir_ent->name_len) {
 		dir_ent = (DirEntry*)&dir->data[i];
@@ -573,16 +564,13 @@ static void cowfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 			  off_t off, struct fuse_file_info *fi)
 {
 	printf("cowfs_read %ld size %ld off %ld\n", ino, size, off);
-	auto block = lookup(*global_ba, (KeyId)ino);
-	if (!block.has_value()) {
+	auto [file, _] = get_block_by_key<FSHeader>(*global_ba, (KeyId)ino);
+	if (!file) {
 		printf("block id %ld\n not found\n", ino);
 		// TODO proper error
 		fuse_reply_err(req, EISDIR);
 		return;
 	}
-
-	auto file_raw = global_ba->load(block.value());
-	auto file = (FSHeader*)file_raw.data();
 
 	printf("loaded inode %ld\n", ino);
 	struct stat e;
